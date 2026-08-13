@@ -28,7 +28,7 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           TARGET_DATE: "2026-08-16"
           CAMP_NIGHT: "1"
-          SITE_GUBUNS: "G03,G02"
+          SITE_GUBUNS: "G01,G02,G03"
         run: python check_availability.py
 
       - name: state.json 변경사항 커밋
