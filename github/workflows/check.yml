@@ -1,0 +1,40 @@
+name: 황매산 잔여자리 확인
+
+on:
+  schedule:
+    # 3분마다 실행 (UTC 기준. 필요시 간격 조정)
+    - cron: "*/3 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 잔여자리 확인 및 알림
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          TARGET_DATE: "2026-08-16"
+          CAMP_NIGHT: "1"
+          SITE_GUBUNS: "G01,G02"
+        run: python check_availability.py
+
+      - name: state.json 변경사항 커밋
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add state.json
+          git diff --cached --quiet || git commit -m "update state.json"
+          git push
