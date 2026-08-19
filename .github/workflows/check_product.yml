@@ -27,7 +27,7 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PRODUCT_URL: "https://www.thankstamp.com/goods/goods_view.php?goodsNo=1000000024"
+          PRODUCT_URLS: "https://www.thankstamp.com/goods/goods_view.php?goodsNo=1000000024,https://www.thankstamp.com/goods/goods_view.php?goodsNo=1000000029"
         run: python check_product.py
 
       - name: product_state.json 변경사항 커밋
