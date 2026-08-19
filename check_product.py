@@ -23,7 +23,7 @@ import requests
 
 PRODUCT_URL = os.environ.get(
     "PRODUCT_URL",
-    "https://www.thankstamp.com/goods/goods_view.php?goodsNo=1000000030",
+    "https://www.thankstamp.com/goods/goods_view.php?goodsNo=1000000024",
 )
 STATE_FILE = Path(os.environ.get("STATE_FILE", "product_state.json"))
 
