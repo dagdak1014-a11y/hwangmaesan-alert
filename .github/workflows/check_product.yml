@@ -28,7 +28,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           PRODUCT_URL: "https://www.thankstamp.com/goods/goods_view.php?goodsNo=1000000024"
-        run: python -c "from kakao_notify import send_kakao_memo; from telegram_notify import send_telegram_message; send_kakao_memo('테스트'); send_telegram_message('테스트')"
+        run: python check_product.py
 
       - name: product_state.json 변경사항 커밋
         run: |
