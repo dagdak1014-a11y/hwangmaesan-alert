@@ -27,7 +27,7 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          CK_PRODUCT_URLS: "https://www.charleskeith.com/kr/CK2-20151673_SFT.PK.html"
+          CK_PRODUCT_URLS: "https://www.charleskeith.com/kr/CK2-20151673_SFT.PK.html,https://www.charleskeith.com/kr/CK2-20151672_SFT.PK.html"
         run: python check_charleskeith.py
 
       - name: charleskeith_state.json 변경사항 커밋
