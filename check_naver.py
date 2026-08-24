@@ -54,7 +54,8 @@ HEADERS = {
 
 
 def fetch_is_available(url: str) -> bool:
-    resp = requests.get(url, headers=HEADERS, timeout=15)
+    proxied_url = f"https://r.jina.ai/{url}"
+    resp = requests.get(proxied_url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     html = resp.text
     is_soldout = any(marker in html for marker in SOLDOUT_MARKERS)
