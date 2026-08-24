@@ -27,7 +27,7 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NAVER_PRODUCT_URLS: "https://brand.naver.com/thankstamp/products/5080326648"
+          NAVER_PRODUCT_URLS: "https://brand.naver.com/thankstamp/products/5080326648,https://brand.naver.com/charleskeithkr/products/13667482515,https://brand.naver.com/charleskeithkr/products/13667481540"
         run: python check_naver.py
 
       - name: naver_state.json 변경사항 커밋
