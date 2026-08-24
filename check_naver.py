@@ -4,17 +4,15 @@
 여러 상품을 동시에 감시할 수 있다 (NAVER_PRODUCT_URLS 를 쉼표로 구분해서 여러 개 지정).
 
 동작 방식
-1. 각 상품 페이지 HTML을 그대로 요청한다.
-2. 아래 SOLDOUT_MARKERS 문구가 있으면 품절, 없으면 구매 가능으로 판단한다.
-   (네이버 스마트스토어는 CSS 클래스명이 빌드마다 바뀌는 해시값이라 클래스 대신
-   고정된 한글 문구로 판단한다.)
+1. 각 상품 페이지 HTML을 그대로 요청한다 (r.jina.ai 프록시를 거쳐서 요청 — 네이버가
+   데이터센터 IP를 직접 차단하기 때문).
+2. 아래 SOLDOUT_MARKERS 문구가 있으면 품절로 판단한다.
+   완전 품절 상품은 문구 대신 구매 UI(선물하기/옵션 선택) 자체가 페이지에서 사라지는
+   경우가 있어, 이 UI가 있는지(BUY_WIDGET_MARKERS)도 함께 확인해 판단한다.
 3. 직전 상태(naver_state.json)와 비교해서 품절 -> 구매가능 으로 바뀐 상품이 있으면
    알림을 보낸다.
 
 주의
-- 이 페이지가 자바스크립트로 나중에 내용을 채우는 방식이라면(서버가 최초 응답에
-  상품 상태를 포함하지 않는다면), 이 방식으로는 정확히 판단하지 못할 수 있다.
-  최초 실행 로그의 [현재 상태]가 실제 화면과 일치하는지 꼭 확인할 것.
 - 사이트가 개편되면 판단 기준(문구)이 바뀔 수 있다.
 - 요청 간격을 너무 짧게 잡지 않는다.
 """
@@ -44,6 +42,13 @@ SOLDOUT_MARKERS = (
     "상품 품절",
 )
 
+# 완전 품절 상품은 구매 UI(선물하기/옵션 선택) 자체가 페이지에서 사라지는 경우가 있어,
+# 이 UI가 있는지도 함께 확인한다.
+BUY_WIDGET_MARKERS = (
+    "선물하기",
+    "옵션 선택",
+)
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -58,8 +63,11 @@ def fetch_is_available(url: str) -> bool:
     resp = requests.get(proxied_url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     html = resp.text
-    is_soldout = any(marker in html for marker in SOLDOUT_MARKERS)
-    return not is_soldout
+
+    has_soldout_phrase = any(marker in html for marker in SOLDOUT_MARKERS)
+    has_buy_widget = any(marker in html for marker in BUY_WIDGET_MARKERS)
+
+    return has_buy_widget and not has_soldout_phrase
 
 
 def load_previous_state() -> dict[str, bool]:
@@ -118,7 +126,7 @@ def main() -> int:
         became_available = current and not previous
         if became_available:
             print("[상태 변화] 품절 -> 구매 가능")
-            message = f"[네이버/땡스탬프] 상품이 구매 가능해졌습니다!\n\n{url}"
+            message = f"[네이버] 상품이 구매 가능해졌습니다!\n\n{url}"
             if send_notifications(message):
                 had_any_failure = True
         else:
