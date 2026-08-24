@@ -28,7 +28,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NAVER_PRODUCT_URLS: "https://brand.naver.com/thankstamp/products/5080326648"
-        run: python check_naver.py
+        run: python -c "from kakao_notify import send_kakao_memo; from telegram_notify import send_telegram_message; send_kakao_memo('네이버 테스트'); send_telegram_message('네이버 테스트')"
 
       - name: naver_state.json 변경사항 커밋
         run: |
