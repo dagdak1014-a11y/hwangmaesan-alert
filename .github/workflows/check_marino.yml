@@ -28,7 +28,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MARINO_SITE_GUBUN: "G02"
-          MARINO_APP_SDATE: "2026-09-04"
+          MARINO_APP_SDATE: "2026-09-19"
           MARINO_CAMP_NIGHT: "1"
         run: python check_marino.py
 
