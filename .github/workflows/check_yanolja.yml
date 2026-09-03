@@ -27,7 +27,7 @@ jobs:
           KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          YANOLJA_URL: "https://nol.yanolja.com/stay/domestic/10070074?verticalCategory=PRODUCT_CATEGORY_KOREA_ACCOMMODATION&checkInDate=2026-09-19&checkOutDate=2026-09-20&adultCount=2"
+          YANOLJA_URL: "https://nol.yanolja.com/stay/domestic/10070074?verticalCategory=PRODUCT_CATEGORY_KOREA_ACCOMMODATION&checkInDate=2026-09-22&checkOutDate=2026-09-23&adultCount=2"
           YANOLJA_ZONES: "오토사이트존,데크사이트존"
         run: python check_yanolja.py
 
