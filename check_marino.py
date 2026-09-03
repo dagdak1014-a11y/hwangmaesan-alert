@@ -3,9 +3,7 @@
 잔여자리가 생기면, 어떤 자리가 비었는지(사이트 번호)까지 포함해서 알림.
 
 동작 방식
-1. 사이트 내부 API(/marinocamping/camp/apply/site/list.do)를 r.jina.ai 프록시를
-   거쳐서 호출한다. (GitHub Actions 서버에서 직접 접속하면 간헐적으로 연결이
-   차단/타임아웃되는 것이 확인되어, 네이버 때와 같은 방식으로 프록시를 거친다.)
+1. 사이트 내부 API(/marinocamping/camp/apply/site/list.do)를 직접 호출한다.
 2. 응답에서 예약 가능한 사이트(class="siteCode ..." + title="예약가능")의
    이름(예: '오토 2')을 모두 추출한다.
 3. 직전 상태(marino_state.json)와 비교해서 새로 생긴 사이트가 있으면 그 목록과 함께 알린다.
@@ -16,8 +14,9 @@
 - MARINO_CAMP_NIGHT: 숙박 일수
 
 주의
-- 프록시를 거치는 만큼 응답이 느려질 수 있다(수십 초). 실행 주기를 너무 짧게
-  잡으면 이전 실행과 겹칠 수 있어 2분 이상으로 잡는 것을 권장한다.
+- 이 사이트는 GitHub Actions 서버 접속을 간헐적으로 차단/타임아웃시키는 것으로
+  확인되었다. 실패하는 실행이 종종 있을 수 있으나, 다음 성공한 실행에서
+  변화를 다시 잡아내므로 알림 자체를 놓치지는 않는다.
 - 사이트가 개편되면 판단 기준(문구/클래스명)이 바뀔 수 있다.
 """
 
@@ -45,9 +44,6 @@ HEADERS = {
                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 }
 
-# 예약 가능한 사이트 블록 안에서 버튼 텍스트(사이트 이름, 예: '오토 2')를 추출.
-# 가능한 사이트는 class="siteCode ..." 로 시작하고, 그 안의 <button ...>이름</button>에
-# disabled 속성이 없다 (품절 사이트는 class="unselect ..." + disabled).
 AVAILABLE_BLOCK_PATTERN = re.compile(
     r'class="siteCode[^"]*".*?<button[^>]*title="예약가능"[^>]*>\s*([^<\r\n]+?)\s*(?:<|$)',
     re.DOTALL,
@@ -55,18 +51,14 @@ AVAILABLE_BLOCK_PATTERN = re.compile(
 
 
 def fetch_available_sites() -> list[str]:
-    params = [
-        ("siteGubun", SITE_GUBUN),
-        ("appSdate", APP_SDATE),
-        ("campNight", CAMP_NIGHT),
-        ("appGubun", "COMMON"),
-        ("personCnt", PERSON_CNT),
-    ]
-    query = "&".join(f"{k}={v}" for k, v in params)
-    target_url = f"{BASE_URL}?{query}"
-    proxied_url = f"https://r.jina.ai/{target_url}"
-
-    resp = requests.get(proxied_url, headers=HEADERS, timeout=45)
+    params = {
+        "siteGubun": SITE_GUBUN,
+        "appSdate": APP_SDATE,
+        "campNight": CAMP_NIGHT,
+        "appGubun": "COMMON",
+        "personCnt": PERSON_CNT,
+    }
+    resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=15)
     resp.raise_for_status()
     html = resp.text
     return [m.strip() for m in AVAILABLE_BLOCK_PATTERN.findall(html)]
