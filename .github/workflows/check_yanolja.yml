@@ -1,0 +1,40 @@
+name: 야놀자 예약가능 확인
+
+on:
+  schedule:
+    - cron: "*/3 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 예약가능 여부 확인 및 알림
+        env:
+          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          YANOLJA_URL: "https://nol.yanolja.com/stay/domestic/10070074?verticalCategory=PRODUCT_CATEGORY_KOREA_ACCOMMODATION&checkInDate=2026-09-19&checkOutDate=2026-09-20&adultCount=2"
+          YANOLJA_ZONES: "오토사이트존,데크사이트존"
+        run: python check_yanolja.py
+
+      - name: yanolja_state.json 변경사항 커밋
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add yanolja_state.json
+          git diff --cached --quiet || git commit -m "update yanolja_state.json"
+          git push
