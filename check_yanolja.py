@@ -1,18 +1,25 @@
 """
-야놀자(nol.yanolja.com) 숙소 상세 페이지에서, 존(zone)별로(예: 오토사이트존,
-데크사이트존) 예약 가능한 객실이 생기면 알림.
+야놀자(nol.yanolja.com) 숙소 상세 페이지에서, 여러 (날짜, 존) 조합의 예약 가능한
+객실이 생기면 알림.
+
+여러 숙박 옵션(예: 1박2일, 2박3일)을 동시에 감시할 수 있다
+(YANOLJA_URLS 를 쉼표로 구분해서 각각 다른 체크인/체크아웃 날짜의 URL을 지정).
 
 동작 방식
-1. 상품 페이지 HTML을 그대로 요청한다 (서버 렌더링 데이터 안에 각 객실 타입의
-   zoneName 과 invalidReasonType(품절 사유)이 구조화된 형태로 포함되어 있음을
-   확인했다. invalidReasonType 이 "SOLD_OUT" 이면 품절, null 이면 예약 가능).
-2. zoneName 별로 묶어서, 그 존에 하나라도 invalidReasonType 이 null(예약 가능)인
+1. 각 URL의 체크인 날짜(checkInDate)를 확인해서, 오늘(한국 시간 기준)이 그 날짜
+   이후(당일 포함)이면 그 URL은 건너뛴다 — 지나간 예약 건에 대한 알림 폭주를 막는다.
+2. 남은 URL에 대해 상품 페이지 HTML을 그대로 요청한다 (서버 렌더링 데이터 안에
+   각 객실 타입의 zoneName 과 invalidReasonType(품절 사유)이 구조화된 형태로
+   포함되어 있음을 확인했다. invalidReasonType 이 "SOLD_OUT" 이면 품절,
+   null 이면 예약 가능).
+3. zoneName 별로 묶어서, 그 존에 하나라도 invalidReasonType 이 null(예약 가능)인
    객실 타입이 있으면 그 존은 '예약 가능'으로 판단한다.
-3. 직전 상태(yanolja_state.json)와 비교해서 품절 -> 가능 으로 바뀐 (URL, 존)
+4. 직전 상태(yanolja_state.json)와 비교해서 품절 -> 가능 으로 바뀐 (URL, 존)
    조합이 있으면 알린다.
 
 환경변수
-- YANOLJA_URL   : 감시할 숙소 상세 페이지 URL (체크인/체크아웃 날짜 포함)
+- YANOLJA_URLS  : 감시할 숙소 상세 페이지 URL들, 쉼표로 구분 (각 URL에 체크인/
+                  체크아웃 날짜 포함)
 - YANOLJA_ZONES : 감시할 존 이름, 쉼표로 구분 (기본값: "오토사이트존,데크사이트존")
 
 주의
@@ -28,16 +35,23 @@ import json
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 
-URL = os.environ.get(
-    "YANOLJA_URL",
-    "https://nol.yanolja.com/stay/domestic/10070074"
-    "?verticalCategory=PRODUCT_CATEGORY_KOREA_ACCOMMODATION"
-    "&checkInDate=2026-09-19&checkOutDate=2026-09-20&adultCount=2",
-)
+URLS = [
+    u.strip()
+    for u in os.environ.get(
+        "YANOLJA_URLS",
+        "https://nol.yanolja.com/stay/domestic/10070074"
+        "?verticalCategory=PRODUCT_CATEGORY_KOREA_ACCOMMODATION"
+        "&checkInDate=2026-09-19&checkOutDate=2026-09-20&adultCount=2",
+    ).split(",")
+    if u.strip()
+]
 ZONES = [
     z.strip()
     for z in os.environ.get("YANOLJA_ZONES", "오토사이트존,데크사이트존").split(",")
@@ -45,6 +59,7 @@ ZONES = [
 ]
 
 STATE_FILE = Path(os.environ.get("YANOLJA_STATE_FILE", "yanolja_state.json"))
+KST = ZoneInfo("Asia/Seoul")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -59,8 +74,20 @@ ZONE_STATUS_PATTERN = re.compile(
 )
 
 
-def fetch_zone_availability() -> dict[str, bool]:
-    resp = requests.get(URL, headers=HEADERS, timeout=20)
+def get_checkin_date(url: str):
+    """URL의 checkInDate 쿼리파라미터를 date 객체로 반환. 없으면 None."""
+    qs = parse_qs(urlparse(url).query)
+    values = qs.get("checkInDate")
+    if not values:
+        return None
+    try:
+        return datetime.strptime(values[0], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def fetch_zone_availability(url: str) -> dict[str, bool]:
+    resp = requests.get(url, headers=HEADERS, timeout=20)
     resp.raise_for_status()
     html = resp.text
 
@@ -114,28 +141,35 @@ def send_notifications(message: str) -> bool:
 
 
 def main() -> int:
-    current_by_zone = fetch_zone_availability()
+    today = datetime.now(KST).date()
     previous_state = load_previous_state()
-
     new_state = dict(previous_state)
     had_any_failure = False
 
-    for zone, current in current_by_zone.items():
-        key = f"{URL}::{zone}"
-        previous = bool(previous_state.get(key, False))
-        new_state[key] = current
+    for url in URLS:
+        checkin = get_checkin_date(url)
+        if checkin is not None and today >= checkin:
+            print(f"[건너뜀] {url} — 체크인일({checkin}) 당일 또는 그 이후라 감시 종료")
+            continue
 
-        print(f"[조회 대상] {zone}")
-        print(f"[현재 상태] {'예약 가능' if current else '품절'}")
+        current_by_zone = fetch_zone_availability(url)
 
-        became_available = current and not previous
-        if became_available:
-            print(f"[상태 변화] {zone}: 품절 -> 예약 가능")
-            message = f"[야놀자] {zone}에 예약 가능한 객실이 생겼습니다!\n\n{URL}"
-            if send_notifications(message):
-                had_any_failure = True
-        else:
-            print("[변화 없음]")
+        for zone, current in current_by_zone.items():
+            key = f"{url}::{zone}"
+            previous = bool(previous_state.get(key, False))
+            new_state[key] = current
+
+            print(f"[조회 대상] {url} / {zone}")
+            print(f"[현재 상태] {'예약 가능' if current else '품절'}")
+
+            became_available = current and not previous
+            if became_available:
+                print(f"[상태 변화] {zone}: 품절 -> 예약 가능")
+                message = f"[야놀자] {zone}에 예약 가능한 객실이 생겼습니다!\n\n{url}"
+                if send_notifications(message):
+                    had_any_failure = True
+            else:
+                print("[변화 없음]")
 
     save_state(new_state)
     return 1 if had_any_failure else 0
