@@ -24,9 +24,9 @@ jobs:
 
       - name: 잔여자리 확인 및 알림
         env:
-          KAKAO_REST_API_KEY: ${{ secrets.KAKAO_REST_API_KEY }}
-          KAKAO_REFRESH_TOKEN: ${{ secrets.KAKAO_REFRESH_TOKEN }}
-          TARGET_DATE: "2026-08-16"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TARGET_DATE: "2026-10-31"
           CAMP_NIGHT: "1"
           SITE_GUBUNS: "G01,G02,G03"
         run: python check_availability.py
