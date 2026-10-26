@@ -1,19 +1,6 @@
 """
-황매산 숲속야영장 '잔여자리 예약' 카라반/캠퍼하우스 알림 봇
-
-동작 방식
-1. hc.go.kr의 잔여자리 조회 화면이 내부적으로 호출하는 site/list.do 엔드포인트를
-   동일한 파라미터로 직접 호출한다.
-2. 응답 HTML에서 "[카라반] xxx" / "[캠퍼하우스] xxx" 형태의 시설명을 추출한다.
-3. 직전 실행 결과(state.json)와 비교해서 "새로 생긴" 시설명이 있으면
-   카카오톡 나에게 보내기로 알림을 보낸다.
-4. state.json을 갱신한다. (GitHub Actions에서는 워크플로가 커밋까지 담당)
-
-주의
-- hc.go.kr은 robots.txt로 자동 접근을 명시적으로 막고 있다(Disallow).
-  이 스크립트를 실제로 배포/운영할지는 사용자 본인이 판단해서 결정할 것.
-  요청 간격을 너무 짧게 잡지 말고(예: 10~15분 이상), 서버에 부담을 주지 않도록 한다.
-- hc.go.kr 페이지 구조가 바뀌면 파싱 정규식이 깨질 수 있다.
+황매산 숲속야영장 '잔여자리 예약' 알림 (텔레그램).
+체크인일 당일 또는 그 이후에는 자동으로 감시를 건너뛴다.
 """
 
 from __future__ import annotations
@@ -22,20 +9,21 @@ import json
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import requests
 
 BASE_URL = "https://www.hc.go.kr/camp/apply/site/list.do"
 
-# 조회 대상: 환경변수로 오버라이드 가능 (기본값 = 8/16~17, 1박, 카라반+캠퍼하우스)
-TARGET_DATE = os.environ.get("TARGET_DATE", "2026-08-16")  # 체크인일 (YYYY-MM-DD)
-CAMP_NIGHT = os.environ.get("CAMP_NIGHT", "1")              # 숙박 일수
-# G01=카라반, G02=캠퍼하우스, G03=텐트사이트 (사이트에서 체크박스 클릭 시 확인된 값)
-SITE_GUBUNS = os.environ.get("SITE_GUBUNS", "G01,G02").split(",")
+TARGET_DATE = os.environ.get("TARGET_DATE", "2026-10-31")
+CAMP_NIGHT = os.environ.get("CAMP_NIGHT", "1")
+SITE_GUBUNS = os.environ.get("SITE_GUBUNS", "G01,G02,G03").split(",")
 PERSON_CNT = os.environ.get("PERSON_CNT", "1")
 
 STATE_FILE = Path(os.environ.get("STATE_FILE", "state.json"))
+KST = ZoneInfo("Asia/Seoul")
 
 FACILITY_PATTERN = re.compile(r"\[(카라반|캠퍼하우스|텐트사이트)\]\s*([^\s<][^<\n]{0,20})")
 
@@ -56,20 +44,16 @@ def fetch_availability() -> set[str]:
     ]
     resp = requests.get(BASE_URL, params=params, headers=HEADERS, timeout=15)
     resp.raise_for_status()
-
     if "예약가능한 시설이 없습니다" in resp.text:
         return set()
-
-    matches = FACILITY_PATTERN.findall(resp.text)
-    return {f"[{gubun}] {name.strip()}" for gubun, name in matches}
+    return {f"[{g}] {n.strip()}" for g, n in FACILITY_PATTERN.findall(resp.text)}
 
 
 def load_previous_state() -> set[str]:
     if not STATE_FILE.exists():
         return set()
     try:
-        data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
-        return set(data.get("available", []))
+        return set(json.loads(STATE_FILE.read_text(encoding="utf-8")).get("available", []))
     except (json.JSONDecodeError, OSError):
         return set()
 
@@ -81,7 +65,26 @@ def save_state(available: set[str]) -> None:
     )
 
 
+def send_notifications(message: str) -> bool:
+    """텔레그램 전송. 실패하면 True 반환."""
+    try:
+        from telegram_notify import send_telegram_message
+
+        send_telegram_message(message)
+        print("[알림] 텔레그램 전송 완료")
+        return False
+    except Exception as exc:  # noqa: BLE001
+        print(f"[텔레그램 알림 실패] {exc}", file=sys.stderr)
+        return True
+
+
 def main() -> int:
+    today = datetime.now(KST).date()
+    target = datetime.strptime(TARGET_DATE, "%Y-%m-%d").date()
+    if today >= target:
+        print(f"[건너뜀] 체크인일({target}) 당일 또는 그 이후라 감시 종료")
+        return 0
+
     current = fetch_availability()
     previous = load_previous_state()
     newly_available = current - previous
@@ -90,25 +93,16 @@ def main() -> int:
     print(f"[현재 잔여] {sorted(current) if current else '없음'}")
 
     if newly_available:
-        print(f"[새로 생긴 잔여자리] {sorted(newly_available)}")
-        from kakao_notify import send_kakao_memo  # 지연 임포트 (토큰 없어도 조회만은 동작하게)
-
         lines = "\n".join(f"- {name}" for name in sorted(newly_available))
         message = (
-            f"[황매산 숲속야영장] {TARGET_DATE} 잔여자리 알림\n\n"
-            f"{lines}\n\n"
-            f"예약: https://www.hc.go.kr/09464/09499/09501.web"
+            f"[황매산 숲속야영장] {TARGET_DATE} 잔여자리 알림\n\n{lines}\n\n"
+            "예약: https://www.hc.go.kr/09464/09499/09501.web"
         )
-        try:
-            send_kakao_memo(message)
-            print("[알림] 카카오톡 전송 완료")
-        except Exception as exc:  # noqa: BLE001
-            print(f"[알림 실패] {exc}", file=sys.stderr)
-            save_state(current)
-            return 1
-    else:
-        print("[변화 없음] 새로운 잔여자리가 없습니다.")
+        failed = send_notifications(message)
+        save_state(current)
+        return 1 if failed else 0
 
+    print("[변화 없음]")
     save_state(current)
     return 0
 
