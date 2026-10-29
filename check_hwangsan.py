@@ -43,19 +43,11 @@ ACT_DATE_TAG = re.compile(r"<input[^>]*id=[\"']actDate[\"'][^>]*>", re.IGNORECAS
 VALUE_ATTR = re.compile(r"value=[\"']([^\"']*)[\"']", re.IGNORECASE)
 
 
-def fetch_remaining() -> dict[str, int]:
-    resp = requests.get(URL, headers=HEADERS, timeout=20)
-    print(f"[진단] status={resp.status_code} final_url={resp.url} length={len(resp.text)}")
-    resp.raise_for_status()
-    try:
-        return parse_remaining(resp.text)
-    except RuntimeError:
-        text = resp.text
-        title = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
-        print(f"[진단] title={title.group(1).strip() if title else None}")
-        print(f"[진단] 'actDate' 문자열 포함 여부: {'actDate' in text}")
-        print(f"[진단] 응답 앞부분:\n{text[:800]}")
-        raise
+def parse_remaining(html: str) -> dict[str, int]:
+    tag = ACT_DATE_TAG.search(html)
+    value = VALUE_ATTR.search(tag.group(0)) if tag else None
+    if not value:
+        raise RuntimeError("actDate 값을 찾지 못했습니다 (사이트 구조 변경 가능성)")
 
     remaining: dict[str, int] = {}
     for item in value.group(1).split(","):
@@ -72,8 +64,17 @@ def fetch_remaining() -> dict[str, int]:
 
 def fetch_remaining() -> dict[str, int]:
     resp = requests.get(URL, headers=HEADERS, timeout=20)
+    print(f"[진단] status={resp.status_code} final_url={resp.url} length={len(resp.text)}")
     resp.raise_for_status()
-    return parse_remaining(resp.text)
+    try:
+        return parse_remaining(resp.text)
+    except RuntimeError:
+        text = resp.text
+        title = re.search(r"<title[^>]*>(.*?)</title>", text, re.I | re.S)
+        print(f"[진단] title={title.group(1).strip() if title else None}")
+        print(f"[진단] 'actDate' 문자열 포함 여부: {'actDate' in text}")
+        print(f"[진단] 응답 앞부분:\n{text[:800]}")
+        raise
 
 
 def load_previous_state() -> dict[str, bool]:
