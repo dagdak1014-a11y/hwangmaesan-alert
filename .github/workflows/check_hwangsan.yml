@@ -1,0 +1,40 @@
+name: 황산캠핑장 예약가능 확인
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: hwangsan-check
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 의존성 설치
+        run: pip install -r requirements.txt
+
+      - name: 예약가능 여부 확인 및 알림
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          HS_TARGET_DATES: "2026-10-31"
+        run: python check_hwangsan.py
+
+      - name: hwangsan_state.json 변경사항 커밋
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add hwangsan_state.json
+          git diff --cached --quiet || git commit -m "update hwangsan_state.json"
+          git pull --rebase --autostash origin main
+          git push
